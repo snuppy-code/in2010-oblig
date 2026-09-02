@@ -1,0 +1,20 @@
+i18n-extract:
+	pybabel extract \
+		--omit-header \
+		--no-default-keywords \
+		--keywords "input output die" \
+		-o in2010_testrunner/i18n/messages.pot \
+		-- $(find in2010_testrunner -name "*.py")
+
+	pybabel update \
+		--omit-header \
+		-i in2010_testrunner/i18n/messages.pot \
+		-d in2010_testrunner/i18n
+
+i18n-compile:
+	pybabel compile \
+		--use-fuzzy \
+		-d in2010_testrunner/i18n
+
+package ref="main":
+	git archive --format=zip {{ref}} . > in2010-testrunner-{{ref}}.zip

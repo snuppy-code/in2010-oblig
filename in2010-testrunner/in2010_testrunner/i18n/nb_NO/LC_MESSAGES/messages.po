@@ -1,0 +1,115 @@
+#: in2010_testrunner/in2010_testrunner.py:49
+msgid "Not initialized. Are you sure you are in the right directory"
+msgstr "Ikke initialisert. Er du i riktig mappe?"
+
+#: in2010_testrunner/in2010_testrunner.py:87
+msgid "cmd"
+msgstr "commando"
+
+#: in2010_testrunner/in2010_testrunner.py:121
+msgid "Command not found"
+msgstr "Fant ikke kommandoen"
+
+#: in2010_testrunner/in2010_testrunner.py:125
+msgid "Commands:"
+msgstr "commando"
+
+#: in2010_testrunner/in2010_testrunner.py:126
+msgid "    help, h     Print help"
+msgstr "    hjelp, h      Print hjelp"
+
+#: in2010_testrunner/in2010_testrunner.py:127
+msgid "    run         Run and test your code"
+msgstr "    kjør          Kjør og test koden din"
+
+#: in2010_testrunner/in2010_testrunner.py:128
+msgid "    update      Download new stuff"
+msgstr "    oppdater      Last ned nye filer"
+
+#: in2010_testrunner/in2010_testrunner.py:129
+msgid "    quit        Exit the program"
+msgstr "    avslutt, q    Avslutt programmet"
+
+#: in2010_testrunner/in2010_testrunner.py:130
+msgid "    clear       clear the screen"
+msgstr "    cls           Tøm skjermen"
+
+#: in2010_testrunner/in2010_testrunner.py:131
+msgid "    compile, c  Compile the java code"
+msgstr "    kompiler, k   Kompiler java-koden"
+
+#: in2010_testrunner/in2010_testrunner.py:132
+msgid "    reload      Reload oppgaver.cfg"
+msgstr "    r             Last inn oppgaver.cfg på nytt"
+
+#: in2010_testrunner/in2010_testrunner.py:133
+msgid "    bug         Report a bug"
+msgstr "     bug          Rapporter en feil i programmet"
+
+#: in2010_testrunner/in2010_testrunner.py:134
+msgid "    zip         Make zip files"
+msgstr "    zip           Lag zipfil"
+
+#: in2010_testrunner/in2010_testrunner.py:152
+msgid ""
+"This directory is not empty. Create and enter a new directory before "
+"using in2010-testrunner"
+msgstr ""
+"Denne mappe er ikke tom. Lag en my mappe og kjør in2010-testrunner fra "
+"den nye mappen"
+
+#: in2010_testrunner/in2010_testrunner.py:154
+msgid ""
+"If you’re a group with more than one person, write all usernames with "
+"spaces between"
+msgstr ""
+"Hvis du leverer i en gruppe med mer enn en person, skriv alle navnene med"
+" mellomrom mellom"
+
+#: in2010_testrunner/in2010_testrunner.py:157
+msgid "UiO username"
+msgstr "UiO brukernavn"
+
+#: in2010_testrunner/in2010_testrunner.py:226
+#, python-brace-format
+msgid "{exercise} - {language} - OK"
+msgstr "{exercise} - {language} - OK"
+
+#: in2010_testrunner/in2010_testrunner.py:231
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: used more than {seconds}s"
+msgstr "{exercise} - {language} - {case}: brukte mer enn {seconds}s"
+
+#: in2010_testrunner/in2010_testrunner.py:239
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: wrong output: ‘{message}’"
+msgstr "{exercise} - {language} - {case}: feil output: ‘{message}’"
+
+#: in2010_testrunner/in2010_testrunner.py:247
+#, python-brace-format
+msgid ""
+"{exercise} - {language} - {case}: too much output. line {linenum} should "
+"not exist"
+msgstr ""
+"{exercise} - {language} - {case}: for mye output. line {linenum} skulle "
+"ikke vært der"
+
+#: in2010_testrunner/in2010_testrunner.py:255
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: not enough output"
+msgstr "{exercise} - {language} - {case}: ikke nok output"
+
+#: in2010_testrunner/in2010_testrunner.py:263
+#, python-brace-format
+msgid ""
+"{exercise} - {language} - {case}: wrong output at line {linenum}. "
+"Expected ‘{expected}’, got ‘{got}’"
+msgstr ""
+"{exercise} - {language} - {case}: feil output på linje {linenum}. "
+"Forventet ‘{expected}’, men fikk ‘{got}’"
+
+#: in2010_testrunner/in2010_testrunner.py:274
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: crashed with error message:"
+msgstr "{exercise} - {language} - {case}: kræsjet med feilmelding:"
+

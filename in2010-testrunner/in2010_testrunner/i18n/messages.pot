@@ -1,0 +1,107 @@
+#: in2010_testrunner/in2010_testrunner.py:49
+msgid "Not initialized. Are you sure you are in the right directory"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:87
+msgid "cmd"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:121
+msgid "Command not found"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:125
+msgid "Commands:"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:126
+msgid "    help, h     Print help"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:127
+msgid "    run         Run and test your code"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:128
+msgid "    update      Download new stuff"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:129
+msgid "    quit        Exit the program"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:130
+msgid "    clear       clear the screen"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:131
+msgid "    compile, c  Compile the java code"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:132
+msgid "    reload      Reload oppgaver.cfg"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:133
+msgid "    bug         Report a bug"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:134
+msgid "    zip         Make zip files"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:152
+msgid ""
+"This directory is not empty. Create and enter a new directory before "
+"using in2010-testrunner"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:154
+msgid ""
+"If you’re a group with more than one person, write all usernames with "
+"spaces between"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:157
+msgid "UiO username"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:226
+#, python-brace-format
+msgid "{exercise} - {language} - OK"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:231
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: used more than {seconds}s"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:239
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: wrong output: ‘{message}’"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:247
+#, python-brace-format
+msgid ""
+"{exercise} - {language} - {case}: too much output. line {linenum} should "
+"not exist"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:255
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: not enough output"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:263
+#, python-brace-format
+msgid ""
+"{exercise} - {language} - {case}: wrong output at line {linenum}. "
+"Expected ‘{expected}’, got ‘{got}’"
+msgstr ""
+
+#: in2010_testrunner/in2010_testrunner.py:274
+#, python-brace-format
+msgid "{exercise} - {language} - {case}: crashed with error message:"
+msgstr ""
+

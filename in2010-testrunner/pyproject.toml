@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "in2010-testrunner"
+version = "1.0.0"
+
+[project.scripts]
+in2010-testrunner = "in2010_testrunner.in2010_testrunner:main"
+
+[tool.setuptools]
+packages = ["in2010_testrunner"]
+
+[tool.setuptools.package-data]
+in2010_testrunner = ["i18n/**/*.po"]
