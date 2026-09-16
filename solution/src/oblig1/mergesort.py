@@ -1,3 +1,8 @@
+# Implementert både i python og java.
+# De burde være ganske like.
+# Gi gjerne tilbakemelding på begge :)
+
+
 import sys
 
 
@@ -13,7 +18,6 @@ def main():
 
 def mergesort(A):
     if len(A) > 1:
-        # ind
         a = mergesort(A[len(A)//2:])
         a_min = 0
         b = mergesort(A[:len(A)//2])
@@ -29,6 +33,7 @@ def mergesort(A):
                 out.append(b[b_min])
                 b_min+=1
 
+        # merge remaining
         entered_a = False
         while a_min < len(a):
             entered_a = True

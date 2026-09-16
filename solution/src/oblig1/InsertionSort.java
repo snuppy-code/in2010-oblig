@@ -1,3 +1,5 @@
+// Se python implementasjonen.
+
 package oblig1;
 
 import java.io.BufferedReader;
