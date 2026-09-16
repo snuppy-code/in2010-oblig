@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import webbrowser
 import configparser
 import gettext
 import hashlib
@@ -11,10 +10,12 @@ import json
 import os
 import pickle
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import typing as t
+import webbrowser
 import zipfile
 from argparse import ArgumentParser
 from collections import OrderedDict
@@ -32,14 +33,19 @@ from .class_file import ClassFile
 
 def main():
     parser = ArgumentParser('in2010-testrunner')
+    parser.add_argument("--source-dir", type=Path, default="./src")
     sub = parser.add_subparsers(dest='command', required=False)
     sub.add_parser("run")
     sub.add_parser("repl")
     sub.add_parser("update")
     sub.add_parser("zip")
+    batch_test_cmd = sub.add_parser("batch-test")
+    batch_test_cmd.add_argument("zip_files", nargs='*', metavar="zip-files", type=Path)
+    init_cmd = sub.add_parser("init")
+    init_cmd.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    config = Config()
+    config = Config(args.source_dir)
     cli = Cli()
 
     def load_or_die():
@@ -49,34 +55,111 @@ def main():
             cli.die("Not initialized. Are you sure you are "
                     "in the right directory")
 
-    match args.command:
-        case None | 'repl':
-            # Read initial configuration
-            try:
-                config.load()
-            except FileNotFoundError:
-                init(config, cli)
-                config.save()
-
-            update(config)
+    if args.command is None or args.command == 'repl':
+        # Read initial configuration
+        try:
+            config.load()
+        except FileNotFoundError:
+            init(config, cli)
             config.save()
 
-            repl(config, cli)
+        update(config)
+        config.save()
 
-        case 'update':
-            load_or_die()
-            update(config)
+        repl(config, cli)
+
+    if args.command == 'init':
+        try:
+            config.load()
+            die("Already initialized")
+        except FileNotFoundError:
+            init(config, cli, force=args.force)
             config.save()
-        case 'compile':
-            load_or_die()
-            compile_exercises(config.exercises)
-        case 'zip':
-            load_or_die()
-            zip_files(config)
+    if args.command == 'batch-test':
+        load_or_die()
+        batch_test(config, cli, args)
 
-        case 'run':
-            load_or_die()
-            test_all_exercises(config.exercises, cli)
+    if args.command == 'update':
+        load_or_die()
+        update(config)
+        config.save()
+    if args.command == 'compile':
+        load_or_die()
+        compile_exercises(config.source_dir, config.exercises)
+    if args.command == 'zip':
+        load_or_die()
+        zip_files(config)
+    if args.command == 'run':
+        load_or_die()
+        for result in test_all_exercises(config.source_dir, config.exercises):
+            cli.output_test_result(result)
+
+
+def batch_test(config: Config, cli: Cli, args) -> None:
+    with tempfile.TemporaryDirectory() as dir:
+        for i, file in enumerate(args.zip_files):
+            shutil.rmtree("out")
+            with zipfile.ZipFile(file) as zf:
+                metadata = configparser.ConfigParser()
+                try:
+                    with zf.open("metadata") as metadata_file:
+                        metadata.read_file(io.TextIOWrapper(metadata_file))
+                    username = metadata['meta']['username']
+                    assert "/" not in username
+                except Exception as e:
+                    print("Invalid oblig file", e)
+                    username = "unknown"
+
+                subdir = Path(dir) / f"{i:03d} {username}"
+                subdir.mkdir()
+                try:
+                    zf.extractall(subdir)
+                except:
+                    print(f"Failed to extract zip file to {subdir}")
+                    continue
+
+                print(f"\n\x1b[48;5;25;37m {username if username != 'unknown' else file} \x1b[0m")
+                config.source_dir = subdir
+
+
+                with open(file.parent / f"report.md", "w") as report:
+                    report.write(f"# {username}\n\n")
+                    report.write(f"filename: {file}\n\n")
+                    report.write(f" exercise             | language   | result\n")
+                    report.write(f"----------------------|------------|--------\n")
+
+                    crashes: list[TestResult] = []
+                    for test_result in test_all_exercises(config.source_dir, config.exercises):
+                        report.write(f" {test_result.exercise.title:20} | {test_result.language:10} | ")
+                        if test_result.error is None:
+                            report.write("OK\n")
+                            continue
+                        case, error = test_result.error
+                        if isinstance(error, TimelimitExceeded):
+                            report.write(f"used more than {error.timeout_seconds}s\n")
+
+                        elif isinstance(error, VerificationFailed):
+                            report.write(f"wrong output: ‘{error.message}’\n")
+
+                        elif isinstance(error, WrongOutput) and error.expected is None:
+                            report.write(f"too much output. line {error.linenum} should not exist\n")
+
+                        elif isinstance(error, WrongOutput) and error.got is None:
+                            report.write(f"no enough output\n")
+
+                        elif isinstance(error, WrongOutput):
+                            report.write(f"wrong output at line {error.linenum}. Expected ‘{error.expected}’, got ‘{error.got}’\n")
+
+                        elif isinstance(error, ProgramCrashed):
+                            report.write(f"crashed with error message\n")
+                            crashes.append(test_result)
+
+                    for crash in crashes:
+                        assert crash.error is not None and isinstance(crash.error[1], ProgramCrashed)
+                        report.write(
+                            f"\n## {crash.exercise.title} - {crash.language}\n\n"
+                            f"```\n{crash.error[1].error_message}\n```\n"
+                        )
 
 
 def repl(config: Config, cli: Cli):
@@ -88,37 +171,41 @@ def repl(config: Config, cli: Cli):
         except (KeyboardInterrupt, EOFError):
             break
 
-        match cmd:
-            case ("h" | "?" | 'help' | 'hjelp', *_):
-                show_help(cli)
+        if len(cmd) == 0:
+            continue
 
-            case ('run' | 'kjør' | 'kjor' | 'r' | 'køyr', *_):
-                test_all_exercises(config.exercises, cli)
+        if cmd[0] in {"h", "?", 'help', 'hjelp'}:
+            show_help(cli)
 
-            case ("update" | "oppdater", *_):
-                update(config)
-                config.save()
+        elif cmd[0] in {'run', 'kjør', 'kjor', 'r', 'køyr'}:
+            for result in test_all_exercises(config.source_dir, config.exercises):
+                cli.output_test_result(result)
 
-            case ('q' | 'quit' | 'avslutt', *_):
-                return
+        elif cmd[0] in {"update", "oppdater"}:
+            update(config)
+            config.save()
 
-            case ('clear' | 'cls', ):
-                cli.clear()
+        elif cmd[0] in {'q', 'quit', 'avslutt'}:
+            return
 
-            case ('kompiler' | 'compile' | 'c' | 'k', *_):
-                compile_exercises(config.exercises)
+        elif cmd[0] in {'clear', 'cls'}:
+            cli.clear()
 
-            case ('reload', *_):
-                config.load()
+        elif cmd[0] in {'kompiler', 'compile', 'c', 'k'}:
+            compile_exercises(config.source_dir, config.exercises)
 
-            case ('zip', *_):
-                zip_files(config)
+        elif cmd[0] in {'reload'}:
+            config.load()
 
-            case ('bug', *_):
-                webbrowser.open("https://github.uio.no/IN2010/in2010-testrunner/issues/new")
+        elif cmd[0] in {'zip'}:
+            zip_files(config)
 
-            case _:
-                cli.output("Command not found")
+        elif cmd[0] in {'bug'}:
+            webbrowser.open(
+                "https://github.uio.no/IN2010/in2010-testrunner/issues/new"
+            )
+        else:
+            cli.output("Command not found")
 
 
 def show_help(cli: Cli) -> None:
@@ -135,10 +222,10 @@ def show_help(cli: Cli) -> None:
 
 
 def zip_files(config):
-    for dir in Path("src").iterdir():
+    for dir in config.source_dir.iterdir():
         with zipfile.ZipFile("oblig1.zip", "w") as zf:
             for path in dir.glob("**/*"):
-                zf.write(path, relpath(path, "src"))
+                zf.write(path, relpath(path, config.source_dir))
             oblig_cfg = configparser.ConfigParser()
             oblig_cfg['meta'] = config['meta']
             with zf.open("metadata", "w") as f:
@@ -146,10 +233,16 @@ def zip_files(config):
                     oblig_cfg.write(f2)
 
 
-def init(config: Config, cli: Cli):
+def init(config: Config, cli: Cli, force: bool = False):
     contents = set(x.name for x in Path(".").iterdir())
-    if len(contents - {".git", ".vscode", ".idea", ".DS_Store", "in2010-testrunner.zip", "in2010-testrunner-main.zip"}):
-        cli.die("This directory is not empty. Create and enter a new directory before using in2010-testrunner")
+    if len(
+            contents - {
+                ".git", ".vscode", ".idea", ".DS_Store",
+                "in2010-testrunner.zip", "in2010-testrunner-main.zip",
+                "in2010-testrunner", "in2010-testrunner-main",
+            }) and not force:
+        cli.die("This directory is not empty. Create and enter a "
+                "new directory before using in2010-testrunner")
 
     cli.output("If you’re a group with more than one person, "
                "write all usernames with spaces between")
@@ -195,88 +288,28 @@ def install_zipfile(config: configparser.ConfigParser, file):
                 zf.extract(member)
 
 
-def test_all_exercises(exercises: list[Exercise], cli: Cli):
+def test_all_exercises(source_dir: Path, exercises: list[Exercise]):
     file_hasher = FileHasher()
-    java_exercises = compile_exercises(exercises)
+    java_exercises = compile_exercises(source_dir, exercises)
     classes = ClassFileCache()
 
     for exercise in exercises:
-        if exercise.python_main is not None and (Path("src") / exercise.python_main).exists():
+        if exercise.python_main is not None and (
+                source_dir / exercise.python_main).exists():
             result_python = test_exercise(
                 exercise, file_hasher, 'python',
-                [sys.executable,
-                 join("src", exercise.python_main)],
-                lambda: python_source_files(exercise))
-            print_test_result(cli, exercise, 'python', result_python)
+                [sys.executable, source_dir / exercise.python_main],
+                lambda: python_source_files(source_dir, exercise))
+            yield TestResult(exercise, 'python', result_python)
 
         if exercise in java_exercises:
-            if exercise.java_main is None and (class_source_path(exercise.java_main)).exists():
+            if exercise.java_main is None or not (class_source_path(source_dir, exercise.java_main)).exists():
                 continue
             result_java = test_exercise(
                 exercise, file_hasher, 'java',
                 ['java', '-cp', 'out', exercise.java_main],
                 lambda: classes.class_closure(exercise.java_main).keys())
-            print_test_result(cli, exercise, 'java', result_java)
-
-
-def print_test_result(cli: Cli, exercise: Exercise, language: str,
-                      result: None | tuple[str, TestFail]):
-    match result:
-        case None:
-            cli.output("{exercise} - {language} - OK",
-                       exercise=exercise.title,
-                       language=language)
-        case case, TimelimitExceeded(timeout_seconds=seconds):
-            cli.output(
-                "{exercise} - {language} - {case}: used more than {seconds}s",
-                exercise=exercise.title,
-                language=language,
-                case=case,
-                seconds=seconds)
-
-        case case, VerificationFailed(message=message):
-            cli.output(
-                "{exercise} - {language} - {case}: wrong output: ‘{message}’",
-                exercise=exercise.title,
-                language=language,
-                case=case,
-                message=message)
-
-        case case, WrongOutput(expected=None, linenum=linenum):
-            cli.output(
-                "{exercise} - {language} - {case}: too much output. "
-                "line {linenum} should not exist",
-                exercise=exercise.title,
-                language=language,
-                case=case,
-                linenum=linenum)
-
-        case case, WrongOutput(got=None, linenum=linenum):
-            cli.output("{exercise} - {language} - {case}: not enough output",
-                       exercise=exercise.title,
-                       language=language,
-                       case=case,
-                       linenum=linenum)
-
-        case case, WrongOutput(expected=expected, got=got, linenum=linenum):
-            cli.output(
-                "{exercise} - {language} - {case}: wrong output at "
-                "line {linenum}. Expected ‘{expected}’, got ‘{got}’",
-                exercise=exercise.title,
-                language=language,
-                case=case,
-                linenum=linenum,
-                expected=expected,
-                got=got)
-
-        case case, ProgramCrashed(error_message=error_message):
-            cli.output(
-                "{exercise} - {language} - {case}: "
-                "crashed with error message:",
-                exercise=exercise.title,
-                language=language,
-                case=case)
-            print(error_message)
+            yield TestResult(exercise, 'java', result_java)
 
 
 def test_exercise(
@@ -318,8 +351,7 @@ def test_exercise(
 
 def run_test(command: list[str | Path], test_case: TestCase,
              actual_output: Path) -> None | TestFail:
-    with (open_input(test_case.input) as stdin, open(actual_output, 'wb')
-          as stdout):
+    with open_input(test_case.input) as stdin, open(actual_output, 'wb') as stdout:
         proc = subprocess.Popen(command,
                                 stdin=stdin,
                                 stdout=stdout,
@@ -327,15 +359,16 @@ def run_test(command: list[str | Path], test_case: TestCase,
 
         timeout = False
         try:
-            stderr = proc.stderr.read().decode('utf8')
-            proc.wait(timeout=test_case.timeout_seconds)
+            _, stderr_bytes = proc.communicate(timeout=test_case.timeout_seconds)
         except subprocess.TimeoutExpired:
             timeout = True
+            proc.kill()
+            _, stderr_bytes = proc.communicate()
+        stderr = stderr_bytes.decode("utf-8")
 
         if timeout:
-            return TimelimitExceeded(
-                stderr_output=stderr,
-                timeout_seconds=test_case.timeout_seconds)
+            return TimelimitExceeded(stderr_output=stderr,
+                                     timeout_seconds=test_case.timeout_seconds)
         elif proc.returncode != 0:
             return ProgramCrashed(stderr)
         else:
@@ -361,16 +394,16 @@ def check_output(correct_output: Path, actual_output: Path) -> TestFail | None:
                                     stdout=subprocess.PIPE)
 
             if len(result.stdout) != 0:
-                return VerificationFailed(result.stdout.decode("utf8"))
+                return VerificationFailed(result.stdout.decode("utf-8"))
             else:
                 return None
         else:
             with open(correct_output) as correct_output_file:
                 # Compare line by line in case there is different
                 # types of newlines
-                for line, (correct, actual) in enumerate(itertools.zip_longest(
-                        correct_output_file,
-                        actual_output_file)):
+                for line, (correct, actual) in enumerate(
+                        itertools.zip_longest(correct_output_file,
+                                              actual_output_file)):
                     correct = correct and correct.rstrip("\r\n")
                     actual = actual and actual.rstrip("\r\n")
                     if correct != actual:
@@ -382,7 +415,9 @@ def check_output(correct_output: Path, actual_output: Path) -> TestFail | None:
 @lru_cache()
 def find_tests(directory: Path) -> list[TestCase]:
     test_config = configparser.ConfigParser()
-    if (fn := directory / "tests.cfg").exists():
+    
+    fn = directory / "tests.cfg"
+    if fn.exists():
         with open(fn) as f:
             test_config.read_file(f)
 
@@ -391,7 +426,8 @@ def find_tests(directory: Path) -> list[TestCase]:
 
     exp = re.compile(r"(.*)\.(input|output).(?:txt|py)")
     for file in directory.iterdir():
-        if (m := exp.fullmatch(file.name)) is not None:
+        m = exp.fullmatch(file.name)
+        if m is not None:
             name = m.group(1)
             if m.group(2) == 'input':
                 input_files[name] = file
@@ -416,7 +452,7 @@ def find_tests(directory: Path) -> list[TestCase]:
     return test_cases
 
 
-def compile_exercises(exercises: list[Exercise]) -> list[Exercise]:
+def compile_exercises(source_dir: Path, exercises: list[Exercise]) -> list[Exercise]:
     os.makedirs("out", exist_ok=True)
 
     # step 1: Figur out what to compile
@@ -424,7 +460,7 @@ def compile_exercises(exercises: list[Exercise]) -> list[Exercise]:
         exercise  #
         for exercise in exercises  #
         if exercise.java_main is not None
-        and class_source_path(exercise.java_main).exists()
+        and class_source_path(source_dir, exercise.java_main).exists()
     ]
     exercises_to_compile = find_changed(exercises, "java-compile")
     if len(exercises_to_compile) == 0:
@@ -432,10 +468,14 @@ def compile_exercises(exercises: list[Exercise]) -> list[Exercise]:
 
     # step 2: Run javac to actually compile
     java_files = [
-        class_source_path(e.java_main)  #
-        for e in exercises if e.java_main is not None
+        class_source_path(source_dir, e.java_main)  #
+        for e in exercises_to_compile if e.java_main is not None
     ]
-    run_javac(*java_files, source_dir=Path("src"), destdir=Path("out"))
+    result = run_javac(*java_files, source_dir=source_dir,
+                       destdir=Path("out"))
+    if result.returncode != 0:
+        return []
+
     file_hasher = FileHasher()  # Create new file hasher to clear cache
 
     # step 3: Creath key files containing hash values to
@@ -445,7 +485,7 @@ def compile_exercises(exercises: list[Exercise]) -> list[Exercise]:
     for exercise in exercises_to_compile:
         classes = class_file_cache.class_closure(exercise.java_main)
         java_files = list({
-            Path("src") / relpath(dirname(f), "out") / cls.source_file
+            source_dir / relpath(dirname(f), "out") / cls.source_file
             for f, cls in classes.items()
         })
         keyfile = f"out/{exercise.id}.java-compile.key"
@@ -471,8 +511,11 @@ class ClassFileCache:
         path = str(path)  # normalize
         if path in self.cache:
             return self.cache[path]
-        with open(path, "rb") as file:
-            classfile = ClassFile(file)
+        try:
+            with open(path, "rb") as file:
+                classfile = ClassFile(file)
+        except FileNotFoundError:
+            return None
         self.cache[path] = classfile
         return classfile
 
@@ -481,6 +524,8 @@ class ClassFileCache:
 
         start_class_file = class_file_path(start_class_name)
         start_class = self.load(start_class_file)
+        if start_class == None:
+            return {}
 
         # our visited set
         class_files = {start_class_file: start_class}
@@ -564,19 +609,18 @@ class FileHasher:
         return self.cache[path]
 
 
-def python_source_files(exercise: Exercise) -> set[str]:
+def python_source_files(source_dir: Path, exercise: Exercise) -> set[str]:
     """Figure out which source files an exercise depends on"""
     if exercise.python_main is None:
         return set()
-    source_file = join(abspath("src"), exercise.python_main)
-    source_dir = dirname(source_file)
-    finder = ModuleFinder(path=[source_dir])
-    finder.run_script(source_file)
+    source_file = source_dir.absolute() / exercise.python_main
+    finder = ModuleFinder(path=[str(source_file.parent)])
+    finder.run_script(str(source_file))
     return {
         module.__file__
         for module in finder.modules.values()  #
         if hasattr(module, '__file__') and module.__file__ is not None
-        and abspath(module.__file__).startswith(source_dir)
+        and abspath(module.__file__).startswith(str(source_file.parent))
     }
 
 
@@ -585,7 +629,7 @@ def class_file_path(class_: str) -> Path:
     return Path('out') / (class_.replace('.', '/') + '.class')
 
 
-def class_source_path(class_: str) -> Path:
+def class_source_path(source_dir: Path, class_: str) -> Path:
     """Convert fully qualified class name to file path
 
     Unlike `class_file_path`, this assumes that the java
@@ -593,26 +637,26 @@ def class_source_path(class_: str) -> Path:
     that java classes are located in file named ClassName.java
     where ClassName is the name of the class
     """
-    return Path('src') / (class_.replace('.', '/') + '.java')
+    return source_dir / (class_.replace('.', '/') + '.java')
 
 
 def run_javac(*files,
               source_dir: str | Path | None = None,
-              destdir: str | Path | None = None):
+              destdir: str | Path | None = None) -> subprocess.CompletedProcess[bytes]:
     args: list[str | Path] = ['javac', '-encoding', 'UTF-8']
     if source_dir is not None:
         args.extend(["--source-path", source_dir])
     if destdir is not None:
         args.extend(["-d", destdir])
     args.extend(files)
-    subprocess.run(args=args)
+    return subprocess.run(args=args)
 
 
 @dataclass
 class Exercise:
     id: str  # Used in file names and stuff
     title: str  # Displayed to the user
-    python_main: str | None  # ralative path from 'src'
+    python_main: str | None  # ralative path from source_dir
     java_main: str | None  # fully qualified class name
     tests_dir: str
 
@@ -628,8 +672,9 @@ class TestCase:
 class Config(configparser.ConfigParser):
     path = "oppgaver.cfg"
 
-    def __init__(self):
+    def __init__(self, source_dir: Path):
         super().__init__(dict_type=OrderedDict)
+        self.source_dir = source_dir
 
     def load(self):
         with open(self.path, "r") as file:
@@ -672,6 +717,68 @@ class Cli:
         except ImportError:
             self.session = None
 
+
+    def output_test_result(self: Cli, test_result: TestResult):
+        if test_result.error is None:
+            self.output("{exercise} - {language} - OK",
+                       exercise=test_result.exercise.title,
+                       language=test_result.language)
+            return
+
+        case, error = test_result.error
+
+        if isinstance(error, TimelimitExceeded):
+            self.output(
+                "{exercise} - {language} - {case}: used more than {seconds}s",
+                exercise=test_result.exercise.title,
+                language=test_result.language,
+                case=case,
+                seconds=error.timeout_seconds)
+
+        elif isinstance(error, VerificationFailed):
+            self.output(
+                "{exercise} - {language} - {case}: wrong output: ‘{message}’",
+                exercise=test_result.exercise.title,
+                language=test_result.language,
+                case=case,
+                message=error.message)
+
+        elif isinstance(error, WrongOutput) and error.expected is None:
+            self.output(
+                "{exercise} - {language} - {case}: too much output. "
+                "line {linenum} should not exist",
+                exercise=test_result.exercise.title,
+                language=test_result.language,
+                case=case,
+                linenum=error.linenum)
+
+        elif isinstance(error, WrongOutput) and error.got is None:
+            self.output("{exercise} - {language} - {case}: not enough output",
+                       exercise=test_result.exercise.title,
+                       language=test_result.language,
+                       case=case,
+                       linenum=error.linenum)
+
+        elif isinstance(error, WrongOutput):
+            self.output(
+                "{exercise} - {language} - {case}: wrong output at "
+                "line {linenum}. Expected ‘{expected}’, got ‘{got}’",
+                exercise=test_result.exercise.title,
+                language=test_result.language,
+                case=case,
+                linenum=error.linenum,
+                expected=error.expected,
+                got=error.got)
+
+        elif isinstance(error, ProgramCrashed):
+            self.output(
+                "{exercise} - {language} - {case}: "
+                "crashed with error message:",
+                exercise=test_result.exercise.title,
+                language=test_result.language,
+                case=case)
+            print(error.error_message)
+
     def input(self, format: str, *args, sep=": ", **kwargs) -> str:
         format = gettext.gettext(format)
         prompt = format.format(*args, **kwargs) + sep
@@ -696,6 +803,13 @@ def first_truthy(iter, pred=lambda x: x):
     for x in iter:
         if pred(x):
             return x
+
+
+@dataclass
+class TestResult:
+    exercise: Exercise
+    language: str
+    error: None | tuple[str, TestFail]
 
 
 class TestFail:

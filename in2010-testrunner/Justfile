@@ -17,4 +17,4 @@ i18n-compile:
 		-d in2010_testrunner/i18n
 
 package ref="main":
-	git archive --format=zip {{ref}} . > in2010-testrunner-{{ref}}.zip
+	(echo '#!/usr/bin/env python3'; git archive --format=zip {{ref}} .) > in2010-testrunner.zip

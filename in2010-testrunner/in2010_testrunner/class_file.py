@@ -141,48 +141,47 @@ def constant_pool(stream):
 
 def constant_pool_entry(stream):
     tag = ConstantTag(u1(stream))
-    match tag:
-        case ConstantTag.Class:
-            return Class_info(stream)
+    if tag == ConstantTag.Class:
+        return Class_info(stream)
 
-        case ConstantTag.Fieldref:
-            return Fieldref_info(stream)
+    elif tag == ConstantTag.Fieldref:
+        return Fieldref_info(stream)
 
-        case ConstantTag.Methodref:
-            return Methodref_info(stream)
+    elif tag == ConstantTag.Methodref:
+        return Methodref_info(stream)
 
-        case ConstantTag.InterfaceMethodref:
-            return InterfaceMethodref_info(stream)
+    elif tag == ConstantTag.InterfaceMethodref:
+        return InterfaceMethodref_info(stream)
 
-        case ConstantTag.String:
-            return String_info(stream)
+    elif tag == ConstantTag.String:
+        return String_info(stream)
 
-        case ConstantTag.Integer:
-            return Integer_info(stream)
+    elif tag == ConstantTag.Integer:
+        return Integer_info(stream)
 
-        case ConstantTag.Float:
-            return Float_info(stream)
+    elif tag == ConstantTag.Float:
+        return Float_info(stream)
 
-        case ConstantTag.Long:
-            return Long_info(stream)
+    elif tag == ConstantTag.Long:
+        return Long_info(stream)
 
-        case ConstantTag.Double:
-            return Double_info(stream)
+    elif tag == ConstantTag.Double:
+        return Double_info(stream)
 
-        case ConstantTag.NameAndType:
-            return NameAndType_info(stream)
+    elif tag == ConstantTag.NameAndType:
+        return NameAndType_info(stream)
 
-        case ConstantTag.Utf8:
-            return Utf8_info(stream)
+    elif tag == ConstantTag.Utf8:
+        return Utf8_info(stream)
 
-        case ConstantTag.MethodHandle:
-            return MethodHandle_info(stream)
+    elif tag == ConstantTag.MethodHandle:
+        return MethodHandle_info(stream)
 
-        case ConstantTag.MethodType:
-            return MethodType_info(stream)
+    elif tag == ConstantTag.MethodType:
+        return MethodType_info(stream)
 
-        case ConstantTag.InvokeDynamic:
-            return InvokeDynamic_info(stream)
+    elif tag == ConstantTag.InvokeDynamic:
+        return InvokeDynamic_info(stream)
 
 
 class Class_info(StructData):
@@ -280,7 +279,9 @@ class Attribute(StructData):
 
     @classmethod
     def register(cls, C: t.Callable[[bytes], Attribute]):
-        name = C.__name__.removesuffix("_attribute")
+        name = C.__name__
+        if name.endswith("_attribute"):
+            name = name[:-10]
         ClassFile.standart_attributes[name] = C
         return C
 
