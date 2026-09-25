@@ -1,0 +1,24 @@
+4
+tt01	Movie A	5.0
+tt02	Movie B	9.0
+tt03	Movie C	9.0
+tt04	Movie D	7.0
+4
+nm01	Alice
+nm02	Bob
+nm03	Carol
+nm04	Dave
+7
+tt01	nm01
+tt01	nm02
+tt02	nm01
+tt02	nm03
+tt03	nm02
+tt03	nm03
+tt04	nm04
+2
+nm01	nm02
+nm01	nm03
+2
+nm01	nm02
+nm01	nm03
