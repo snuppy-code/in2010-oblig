@@ -2,13 +2,14 @@ import heapq
 import sys, collections
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import override, List, Optional
+from typing import override, List, Optional, Dict, Tuple
 
 
 def debug(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-
+# Representerer en node i grafen.
+# Arver fra `ABC` (abstract base class), som blir tilsvarende en `abstract` klasse i Java.
 class Node(ABC):
     def __init__(self):
         pass
@@ -20,7 +21,7 @@ class Node(ABC):
     def __str__(self) -> str:
         return self.get_id()
 
-
+# Representerer en film i grafen
 class Movie(Node):
     def __init__(self, ttid: str, title: str, rating: float):
         self.ttid = ttid
@@ -33,10 +34,10 @@ class Movie(Node):
     def get_id(self):
         return self.ttid
 
-
+# Representerer en skuespiller i grafen
 class Actor(Node):
-    def __init__(self, id: str, navn: str):
-        self.nmid = id
+    def __init__(self, nmid: str, navn: str):
+        self.nmid = nmid
         self.navn = navn
         super().__init__()
 
@@ -45,13 +46,14 @@ class Actor(Node):
         return self.nmid
 
 
+# Brukes til i prioritetskøen i chillest_path.
+# Stjålet fra dokumentasjonen til `heapq`: https://docs.python.org/3/library/heapq.html#priority-queue-implementation-notes
 @dataclass(order=True)
 class ChillestPathQueueItem:
     total_weight: float
     node_id: str = field(compare=False)
-    path: List[Node] = field(compare=False)
 
-
+# representerer grafen
 class Graph:
     def __init__(self):
         self._nodes = dict()
@@ -68,68 +70,107 @@ class Graph:
     def get_node_by_id(self, id: str):
         return self._nodes[id]
 
-    def compute_components(self):
+
+    def compute_components(self) -> Tuple[int, Dict[int, int]]:
         visited = set()
-        count = 0
 
-        map = dict()
+        # mapper (antall `Actor`s i komponentet) -> (antall komponenter med så mange `Actor`s)
+        component_map: Dict[int, int] = dict()
+
         for _, n in self._nodes.items():
-            if not n in visited:
-                count += 1
-                elements_in_components = self.dfs_iterative(n, visited)
-                if elements_in_components in map:
-                    map[elements_in_components] += 1
-                else:
-                    map[elements_in_components] = 1
+            # hopper over noder som allerede har blit telt
+            if n in visited:
+                continue
+            elements_in_component = self.dfs_iterative(n, visited)
 
-        return count, map
+            # hvis vi starter å utforske fra en Movie node kan det hende at dfs_iterative returnerer 0
+            # de telles ikke med i det endelige resultatet
+            if elements_in_component == 0:
+                continue
+
+            if elements_in_component in component_map:
+                component_map[elements_in_component] += 1 # øker antallet
+            else:
+                component_map[elements_in_component] = 1 # eller setter til 1 om det antallet ikke har blitt sett før
+
+        return len(component_map.keys()), component_map
 
     def shortest_path(self, src: str, dst: str):
         src_node = self.get_node_by_id(src)
 
         visited = {src_node}
         queue = collections.deque()
-        queue.append((src_node, []))
+        queue.append(src_node)
+
+        node_shortest_path_to: Dict[str, Optional[str]] = {n: None for n in self._nodes}
 
         while len(queue) > 0:
-            node, path_to = queue.popleft()
+            node = queue.popleft()
 
             for neighbour in self._edge_map[node.get_id()]:
                 if not neighbour in visited:
-                    queue.append((neighbour, [*path_to, node]))
+                    queue.append(neighbour)
                     visited.add(neighbour)
 
-                    if neighbour.get_id() == dst:
-                        return [x.get_id() for x in [*path_to, node, neighbour]]
+                    node_shortest_path_to[neighbour.get_id()] = node.get_id()
 
-        return []
+                    if neighbour.get_id() == dst:
+                        path = [dst]
+                        next = node_shortest_path_to[dst]
+                        while next is not None:
+                            path.append(next)
+                            next = node_shortest_path_to[next]
+
+                        return reversed(path)
+
+
+
+
+        return None
 
     def chillest_path(self, src: str, dst: str) -> Optional[List[str]]:
         queue: List[ChillestPathQueueItem] = []
         visited = set()
 
+        node_shortest_path_to: Dict[str, Optional[str]] = {n: None for n in self._nodes}
+
         src_node = self.get_node_by_id(src)
-        heapq.heappush(queue, ChillestPathQueueItem(total_weight=0.0, node_id=src, path=[]))
+        heapq.heappush(queue, ChillestPathQueueItem(total_weight=0.0, node_id=src))
         visited.add(src)
 
         while len(queue) > 0:
             item = heapq.heappop(queue)
 
             for neighbour in self._edge_map[item.node_id]:
-                if not neighbour in visited:
+                if not neighbour.get_id() in visited:
+                    # debug(f"visiting {neighbour.get_id()} from {item.node_id}")
                     new_weight = item.total_weight
-                    new_path = [*item.path, item.node_id]
+                    visited.add(neighbour.get_id())
+                    # new_path = [*item.path, item.node_id]
+
 
                     if isinstance(neighbour, Movie):
                         new_weight += 10.0 - neighbour.rating
 
-                    heapq.heappush(queue, ChillestPathQueueItem(total_weight=new_weight, node_id=neighbour.get_id(), path=new_path))
+                    heapq.heappush(queue, ChillestPathQueueItem(total_weight=new_weight, node_id=neighbour.get_id()))
+
+                    node_shortest_path_to[neighbour.get_id()] = item.node_id
 
                     if neighbour.get_id() == dst:
-                        return [*new_path, neighbour.get_id()]
+                        # debug(node_shortest_path_to)
+                        path = [dst]
+                        next = node_shortest_path_to[dst]
+                        while next is not None:
+                            path.append(next)
+                            next = node_shortest_path_to[next]
+
+                        return reversed(path)
+
 
         return None
 
+    # rekursiv implementasjon av depth-first search som teller antall `Actor`s den finner
+    # ikke brukt i det ferdige programmet, siden det fulle datasettet krasher med RecursionError: maximum recursion depth exceeded
     def dfs_recursive(self, n: Node, visited: set) -> int:
         visited.add(n)
         sum = 1 if isinstance(n, Actor) else 0
@@ -139,11 +180,12 @@ class Graph:
 
         return sum
 
+    # iterativ implementasjon av DFS teller antall `Actor`s den finner i dette komponentet
     def dfs_iterative(self, n: Node, visited: set) -> int:
         queue = collections.deque()
         queue.append(n)
 
-        sum = 1 if isinstance(n, Actor) else 0
+        actor_count = 1 if isinstance(n, Actor) else 0
 
         while len(queue) > 0:
             node = queue.popleft()
@@ -153,12 +195,11 @@ class Graph:
                     continue
 
                 if isinstance(neighbour, Actor):
-                    sum += 1
+                    actor_count += 1
                 visited.add(neighbour)
                 queue.append(neighbour)
 
-        return sum
-
+        return actor_count
 
 
 def main():
@@ -171,8 +212,6 @@ def main():
         # parts består av [ttid, tittel, rating]
 
         graph.add_node(Movie(ttid, title, float(rating)))
-
-        debug(i)
 
     debug("added all movies")
 
@@ -215,7 +254,7 @@ def main():
         # parts består av [nmid₁, nmid₂]
 
         path = graph.chillest_path(src, dst)
-        debug("\t".join(path))
+        # debug("\t".join(path))
         print("\t".join(path))
 
     debug("finished finding chillest paths")
