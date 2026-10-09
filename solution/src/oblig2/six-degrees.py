@@ -100,7 +100,7 @@ class Graph:
         queue = collections.deque()
         queue.append(src)
 
-        node_shortest_path_to: Dict[str, Optional[str]] = {n: None for n in self._nodes}
+        added_by: Dict[str, Optional[str]] = {n: None for n in self._nodes}
 
         while len(queue) > 0:
             node = queue.popleft()
@@ -109,14 +109,14 @@ class Graph:
                     queue.append(neighbour)
                     visited.add(neighbour)
 
-                    node_shortest_path_to[neighbour] = node
+                    added_by[neighbour] = node
 
                     if neighbour == dst:
                         path = [dst]
-                        next = node_shortest_path_to[dst]
+                        next = added_by[dst]
                         while next is not None:
                             path.append(next)
-                            next = node_shortest_path_to[next]
+                            next = added_by[next]
 
                         return reversed(path)
 
@@ -132,7 +132,7 @@ class Graph:
         # brukes til å holde styr på den chilleste veien
         # kan lett traverseres for å finne hele veien
         # blir som et slags ukomplett spenntre(?)
-        node_shortest_path_to: Dict[str, Optional[str]] = {n: None for n in self._nodes}
+        added_by: Dict[str, Optional[str]] = {n: None for n in self._nodes}
 
         heapq.heappush(queue, ChillestPathQueueItem(total_weight=0.0, node_id=src))
 
@@ -153,16 +153,16 @@ class Graph:
                 heapq.heappush(queue, ChillestPathQueueItem(total_weight=new_weight, node_id=neighbour))
 
                 # den korteste veien til noden `neighbour` må være fra `item.node_id`
-                node_shortest_path_to[neighbour] = item.node_id
+                added_by[neighbour] = item.node_id
 
                 # hvis vi har kommet til slutten konstrueres og returneres veien
                 if neighbour == dst:
-                    # går baklengs gjennom node_shortest_path_to for å finne veien
+                    # går baklengs gjennom added_by for å finne veien
                     path = [dst]
-                    next = node_shortest_path_to[dst]
+                    next = added_by[dst]
                     while next is not None:
                         path.append(next)
-                        next = node_shortest_path_to[next]
+                        next = added_by[next]
 
                     return reversed(path)
 
