@@ -17,7 +17,7 @@ import tempfile
 import typing as t
 import webbrowser
 import zipfile
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -34,11 +34,13 @@ from .class_file import ClassFile
 def main():
     parser = ArgumentParser('in2010-testrunner')
     parser.add_argument("--source-dir", type=Path, default="./src")
+    parser.add_argument("--disable-initial-help", action=BooleanOptionalAction)
     sub = parser.add_subparsers(dest='command', required=False)
     sub.add_parser("run")
     sub.add_parser("repl")
     sub.add_parser("update")
     sub.add_parser("zip")
+    sub.add_parser("compile")
     batch_test_cmd = sub.add_parser("batch-test")
     batch_test_cmd.add_argument("zip_files", nargs='*', metavar="zip-files", type=Path)
     init_cmd = sub.add_parser("init")
@@ -66,7 +68,7 @@ def main():
         update(config)
         config.save()
 
-        repl(config, cli)
+        repl(config, cli, args)
 
     if args.command == 'init':
         try:
@@ -78,7 +80,6 @@ def main():
     if args.command == 'batch-test':
         load_or_die()
         batch_test(config, cli, args)
-
     if args.command == 'update':
         load_or_die()
         update(config)
@@ -98,7 +99,7 @@ def main():
 def batch_test(config: Config, cli: Cli, args) -> None:
     with tempfile.TemporaryDirectory() as dir:
         for i, file in enumerate(args.zip_files):
-            shutil.rmtree("out")
+            shutil.rmtree("out", ignore_errors=True)
             with zipfile.ZipFile(file) as zf:
                 metadata = configparser.ConfigParser()
                 try:
@@ -162,8 +163,9 @@ def batch_test(config: Config, cli: Cli, args) -> None:
                         )
 
 
-def repl(config: Config, cli: Cli):
-    show_help(cli)
+def repl(config: Config, cli: Cli, args):
+    if not args.disable_initial_help:
+        show_help(cli)
 
     while True:
         try:
@@ -221,9 +223,9 @@ def show_help(cli: Cli) -> None:
     cli.output("    zip         Make zip files")
 
 
-def zip_files(config):
+def zip_files(config: Config):
     for dir in config.source_dir.iterdir():
-        with zipfile.ZipFile("oblig1.zip", "w") as zf:
+        with zipfile.ZipFile(f"{dir.name}.zip", "w") as zf:
             for path in dir.glob("**/*"):
                 zf.write(path, relpath(path, config.source_dir))
             oblig_cfg = configparser.ConfigParser()
@@ -319,9 +321,6 @@ def test_exercise(
     command: list[str | Path],
     find_hash_files: t.Callable[[], t.Iterable[str]],
 ) -> None | tuple[str, TestFail]:
-
-    assert exercise.java_main is not None
-
     # Figure out file paths
     key_file = f"out/{exercise.id}.{language}-test.key"
     result_file = f"out/{exercise.id}-{language}-result.pickle"
@@ -355,16 +354,16 @@ def run_test(command: list[str | Path], test_case: TestCase,
         proc = subprocess.Popen(command,
                                 stdin=stdin,
                                 stdout=stdout,
-                                stderr=subprocess.PIPE)
+                                stderr=subprocess.PIPE,
+                                text=True)
 
         timeout = False
         try:
-            _, stderr_bytes = proc.communicate(timeout=test_case.timeout_seconds)
+            _, stderr = proc.communicate(timeout=test_case.timeout_seconds)
         except subprocess.TimeoutExpired:
             timeout = True
             proc.kill()
-            _, stderr_bytes = proc.communicate()
-        stderr = stderr_bytes.decode("utf-8")
+            _, stderr = proc.communicate()
 
         if timeout:
             return TimelimitExceeded(stderr_output=stderr,
@@ -391,10 +390,11 @@ def check_output(correct_output: Path, actual_output: Path) -> TestFail | None:
         if correct_output.name.endswith(".py"):
             result = subprocess.run([sys.executable, correct_output],
                                     stdin=actual_output_file,
-                                    stdout=subprocess.PIPE)
+                                    stdout=subprocess.PIPE,
+                                    text=True)
 
             if len(result.stdout) != 0:
-                return VerificationFailed(result.stdout.decode("utf-8"))
+                return VerificationFailed(result.stdout)
             else:
                 return None
         else:
@@ -447,7 +447,7 @@ def find_tests(directory: Path) -> list[TestCase]:
             TestCase(case,
                      input_files[case],
                      output_files[case],
-                     timeout_seconds=int(timeout_seconds)))
+                     timeout_seconds=float(timeout_seconds)))
 
     return test_cases
 
@@ -507,7 +507,7 @@ class ClassFileCache:
     def __init__(self) -> None:
         self.cache: dict[str, ClassFile] = {}
 
-    def load(self, path: str | Path) -> ClassFile:
+    def load(self, path: str | Path) -> ClassFile | None:
         path = str(path)  # normalize
         if path in self.cache:
             return self.cache[path]
@@ -524,7 +524,7 @@ class ClassFileCache:
 
         start_class_file = class_file_path(start_class_name)
         start_class = self.load(start_class_file)
-        if start_class == None:
+        if start_class is None:
             return {}
 
         # our visited set
@@ -666,7 +666,7 @@ class TestCase:
     id: str
     input: Path
     correct_output: Path
-    timeout_seconds: int
+    timeout_seconds: float
 
 
 class Config(configparser.ConfigParser):
@@ -711,10 +711,13 @@ class Cli:
         gettext.bindtextdomain("messages", localedir)
         gettext.textdomain("messages")
 
-        try:
-            import prompt_toolkit
-            self.session = prompt_toolkit.PromptSession()
-        except ImportError:
+        if os.isatty(0):
+            try:
+                import prompt_toolkit
+                self.session = prompt_toolkit.PromptSession()
+            except ImportError:
+                self.session = None
+        else:
             self.session = None
 
 
@@ -736,12 +739,20 @@ class Cli:
                 seconds=error.timeout_seconds)
 
         elif isinstance(error, VerificationFailed):
-            self.output(
-                "{exercise} - {language} - {case}: wrong output: ‘{message}’",
-                exercise=test_result.exercise.title,
-                language=test_result.language,
-                case=case,
-                message=error.message)
+            if "\n" in error.message:
+                self.output(
+                    "{exercise} - {language} - {case}: wrong output:\n{message}",
+                    exercise=test_result.exercise.title,
+                    language=test_result.language,
+                    case=case,
+                    message=error.message)
+            else:
+                self.output(
+                    "{exercise} - {language} - {case}: wrong output: ‘{message}’",
+                    exercise=test_result.exercise.title,
+                    language=test_result.language,
+                    case=case,
+                    message=error.message)
 
         elif isinstance(error, WrongOutput) and error.expected is None:
             self.output(
@@ -819,7 +830,7 @@ class TestFail:
 @dataclass
 class TimelimitExceeded(TestFail):
     stderr_output: str
-    timeout_seconds: int
+    timeout_seconds: float
 
 
 @dataclass
