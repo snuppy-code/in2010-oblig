@@ -7,20 +7,20 @@ import java.io.InputStreamReader;
 
 class InsertionSort {
 
-    public static void main(String[] args) {
-        // Read input
-        BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-        int[] A = input.lines().mapToInt(i -> Integer.parseInt(i)).toArray();
+  public static void main(String[] args) {
+    // Read input
+    BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+    int[] A = input.lines().mapToInt(i -> Integer.parseInt(i)).toArray();
 
-        insertionSort(A);
+    insertionSort(A);
 
-        // Print result
-        for (int num : A) {
-            System.out.println(num);
-        }
+    // Print result
+    for (int num : A) {
+      System.out.println(num);
     }
+  }
 
-    static void insertionSort(int[] A) {
-        // Skriv her
-    }
+  static void insertionSort(int[] A) {
+    // Skriv her
+  }
 }
