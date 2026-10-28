@@ -38,25 +38,20 @@ class SetHash:
         self._size: int = 0
         self._capacity: int = 10
 
-        self._test_set = set()
-
     def contains(self, x):
         i = x % self._capacity
 
         while self._items[i] is not None:
             if x == self._items[i]:
-                assert x in self._test_set
                 return True
 
             i = (i + 1) % self._capacity
 
         debug(f"{x} not in set. searched from {x % self._capacity}")
 
-        assert (x not in self._test_set)
         return False
 
     def insert(self, x):
-        self._test_set.add(x)
 
         if self.__loadfactor() > 0.5:
             debug("rehashing")
@@ -66,14 +61,12 @@ class SetHash:
 
         while self._items[i] is not None:
             if self._items[i] == x:
-                self.__assert_size()
                 return
             i = (i + 1) % self._capacity
 
         self._items[i] = x
         self._size += 1
         debug(f"added {x} at {i} because {self._capacity}. new size {self._size}")
-        self.__assert_size()
 
     def __loadfactor(self):
         return self._size / self._capacity
@@ -92,27 +85,17 @@ class SetHash:
             self._items[i] = x
 
 
-    def __assert_size(self):
-        assert len(self._test_set) == self.size(), f"expected size: {len(self._test_set)}. found {self.size()}"
-
     def remove(self, x):
-        try:
-            self._test_set.remove(x)
-        except KeyError:
-            pass
-
         i = x % self._capacity
         while self._items[i] is not None:
             if self._items[i] == x:
                 debug(f"removing {x}")
                 self._items[i] = Deleted()
                 self._size -= 1
-                self.__assert_size()
                 return
 
             i = (i + 1) % self._capacity
         debug(f"{x} not in set. not removing")
-        self.__assert_size()
 
     def size(self):
         return self._size
