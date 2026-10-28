@@ -1,7 +1,7 @@
 package test_oblig;
 
 public class Task1 {
-    public static void main(String[] args) throws InterruptedException {
-        System.out.println("fail");
-    }
+  public static void main(String[] args) throws InterruptedException {
+    System.out.println("fail");
+  }
 }
