@@ -2,9 +2,11 @@ import sys
 from typing import List, Optional
 
 def debug(*args, **kwargs):
-    print(file=sys.stderr, *args, **kwargs)
+    pass
+    # print(file=sys.stderr, *args, **kwargs)
 
-class Empty:
+# markerer en plass i arrayet som slettet
+class Deleted:
     pass
 
 
@@ -29,10 +31,10 @@ def main():
             print(set.size())
             debug(set.size())
 
-
+# Bruker linear probing med "marker plassen som slettet" strategien for å håndtere sletting
 class SetHash:
     def __init__(self):
-        self._items: List[Optional[str | Empty]] = [None] * 10
+        self._items: List[Optional[int | Deleted]] = [None] * 10
         self._size: int = 0
         self._capacity: int = 10
 
@@ -77,10 +79,9 @@ class SetHash:
         return self._size / self._capacity
 
     def __rehash(self):
-        old = [x for x in self._items if x is not None and not isinstance(x, Empty)]
+        old = [x for x in self._items if x is not None and not isinstance(x, Deleted)]
         self._capacity *= 2
-        new_items = [None] * self._capacity
-        self._items = new_items
+        self._items = [None] * self._capacity
 
         for x in old:
             i = x % self._capacity
@@ -104,7 +105,7 @@ class SetHash:
         while self._items[i] is not None:
             if self._items[i] == x:
                 debug(f"removing {x}")
-                self._items[i] = Empty()
+                self._items[i] = Deleted()
                 self._size -= 1
                 self.__assert_size()
                 return
