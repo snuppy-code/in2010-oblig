@@ -3,12 +3,7 @@ from typing import List, Optional
 
 def debug(*args, **kwargs):
     pass
-    # print(file=sys.stderr, *args, **kwargs)
-
-# markerer en plass i arrayet som slettet
-class Deleted:
-    pass
-
+    # print(*args, **kwargs, file=sys.stderr)
 
 def main():
     N = int(input())
@@ -34,7 +29,7 @@ def main():
 # Bruker linear probing med "marker plassen som slettet" strategien for å håndtere sletting
 class SetHash:
     def __init__(self):
-        self._items: List[Optional[int | Deleted]] = [None] * 10
+        self._items: List[Optional[int]] = [None] * 10
         self._size: int = 0
         self._capacity: int = 10
 
@@ -72,7 +67,7 @@ class SetHash:
         return self._size / self._capacity
 
     def __rehash(self):
-        old = [x for x in self._items if x is not None and not isinstance(x, Deleted)]
+        old = [x for x in self._items if x is not None]
         self._capacity *= 2
         self._items = [None] * self._capacity
 
@@ -90,12 +85,29 @@ class SetHash:
         while self._items[i] is not None:
             if self._items[i] == x:
                 debug(f"removing {x}")
-                self._items[i] = Deleted()
+                self._items[i] = None
                 self._size -= 1
+                self.__fill_hole(i)
                 return
 
             i = (i + 1) % self._capacity
         debug(f"{x} not in set. not removing")
+
+    def __fill_hole(self, hole_index: int):
+        s = 1
+        j = (hole_index + s) % self._capacity
+        while self._items[j] is not None:
+            v = self._items[j]
+            h = v % self._capacity
+
+            if not (0 < (h - hole_index) % self._capacity <= s):
+                self._items[hole_index] = v
+                self._items[j] = None
+                self.__fill_hole(j)
+                return
+
+            s += 1
+            j = (hole_index + s) % self._capacity
 
     def size(self):
         return self._size
